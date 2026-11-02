@@ -2,6 +2,7 @@
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/gpu_time_budget.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
 
@@ -58,6 +59,14 @@ void set_metallib_path(const std::string& path) {
 
 const std::string& get_metallib_path() {
   return g_metallib_path;
+}
+
+void set_gpu_time_budget(double milliseconds) {
+  gpu_time_budget().set(milliseconds * 1e-3);
+}
+
+void reset_gpu_time_budget() {
+  gpu_time_budget().reset();
 }
 
 } // namespace mlx::core::metal

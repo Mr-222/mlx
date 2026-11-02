@@ -95,4 +95,35 @@ void init_metal(nb::module_& m) {
     DEPRECATE("mx.metal.device_info", "mx.device_info");
     return mx::device_info(mx::Device(mx::Device::gpu, 0));
   });
+  metal.def(
+      "set_gpu_time_budget",
+      &mx::metal::set_gpu_time_budget,
+      "milliseconds"_a,
+      R"pbdoc(
+      Limit the GPU time that MLX uses in each frame.
+
+      Use this to share the GPU with a renderer. Call
+      :func:`reset_gpu_time_budget` once per frame, best when the GPU work
+      of the frame completes. When the budget of the current frame is used
+      up, the thread that evaluates arrays waits for the next frame. If no
+      reset comes for 100 ms, a new frame starts automatically.
+
+      Args:
+        milliseconds (float): The GPU time per frame. ``0`` removes the
+          limit.
+
+      Example:
+        >>> mx.metal.set_gpu_time_budget(5.0)
+        >>> # In the render loop, once per frame:
+        >>> mx.metal.reset_gpu_time_budget()
+      )pbdoc");
+  metal.def(
+      "reset_gpu_time_budget",
+      &mx::metal::reset_gpu_time_budget,
+      R"pbdoc(
+      Start a new frame for the GPU time budget.
+
+      GPU time used above the budget in the last frame is charged to the new
+      frame. See :func:`set_gpu_time_budget`.
+      )pbdoc");
 }

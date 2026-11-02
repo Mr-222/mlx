@@ -27,4 +27,16 @@ MLX_API const
 MLX_API void set_metallib_path(const std::string& path);
 MLX_API const std::string& get_metallib_path();
 
+/**
+ * Limit the GPU time that MLX uses in each frame, in milliseconds.
+ *
+ * Call `reset_gpu_time_budget()` once per frame. When the budget of the
+ * current frame is used up, the thread that evaluates arrays waits for the
+ * next frame. A value of 0 removes the limit.
+ */
+MLX_API void set_gpu_time_budget(double milliseconds);
+
+/** Start a new frame for the GPU time budget. */
+MLX_API void reset_gpu_time_budget();
+
 } // namespace mlx::core::metal

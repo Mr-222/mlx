@@ -28,6 +28,9 @@ const std::string& get_metallib_path() {
       "[metal::get_metallib_path] Cannot get metallib path without metal backend");
 }
 
+void set_gpu_time_budget(double) {}
+void reset_gpu_time_budget() {}
+
 } // namespace metal
 
 } // namespace mlx::core

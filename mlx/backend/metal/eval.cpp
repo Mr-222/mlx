@@ -30,6 +30,8 @@ void eval(array& arr) {
   auto pool = metal::new_scoped_memory_pool();
   auto s = arr.primitive().stream();
   auto& encoder = metal::get_command_encoder(s);
+  // Can commit the current buffer, so call it before getting the buffer.
+  encoder.wait_for_budget();
   auto* command_buffer = encoder.get_command_buffer();
 
   auto outputs = arr.outputs();

@@ -12,6 +12,7 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/event.h"
+#include "mlx/backend/metal/gpu_time_budget.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/utils.h"
@@ -526,18 +527,53 @@ void CommandEncoder::wait_event(Event event, uint64_t value) {
 
 bool CommandEncoder::needs_commit() const {
   auto [max_ops, max_mb] = device_.get_max_ops_mb_per_buffer();
+  if (budget_ops_ > 0) {
+    max_ops = std::min(max_ops, budget_ops_ - 1);
+  }
   return (buffer_ops_ > max_ops) || ((buffer_sizes_ >> 20) > max_mb);
+}
+
+void CommandEncoder::wait_for_budget() {
+  auto& budget = gpu_time_budget();
+  if (!budget.enabled() || buffer_ops_ > 0) {
+    return;
+  }
+  budget_ops_ = budget.max_ops();
+  if (budget_ops_ == 0) {
+    // A committed buffer can wait on a signal that is still in the open
+    // buffer of another stream. Commit all open buffers before waiting.
+    for (auto* encoders : {&get_command_encoders(), &get_global_command_encoders()}) {
+      for (auto& [_, encoder] : *encoders) {
+        encoder.end_encoding();
+        encoder.commit();
+      }
+    }
+    budget_ops_ = budget.wait_for_ops();
+  }
 }
 
 void CommandEncoder::commit(std::function<void()> completion) {
   // Metal locks a command buffer's residency at commit time, so attach any
   // sets created since the last commit first.
   residency_sets_.attach_new_sets(queue_.get(), sets_attached_);
+  int budget_ops = gpu_time_budget().enabled() ? buffer_ops_ : 0;
+  double reserved = budget_ops > 0 ? gpu_time_budget().reserve(budget_ops) : 0.0;
   buffer_->addCompletedHandler(
       [&error_ = error_,
        wait_events = std::move(wait_events_),
        signal_events = std::move(signal_events_),
-       completion = std::move(completion)](MTL::CommandBuffer* cbuf) mutable {
+       completion = std::move(completion),
+       budget_ops,
+       reserved](MTL::CommandBuffer* cbuf) mutable {
+        if (budget_ops > 0) {
+          bool ok = cbuf->status() == MTL::CommandBufferStatusCompleted;
+          gpu_time_budget().release(
+              reserved,
+              budget_ops,
+              ok ? cbuf->GPUStartTime() : 0.0,
+              ok ? cbuf->GPUEndTime() : 0.0,
+              ok && wait_events.empty());
+        }
         if (completion) {
           completion();
         }
@@ -575,6 +611,7 @@ void CommandEncoder::commit(std::function<void()> completion) {
   buffer_ = NS::RetainPtr(queue_->commandBufferWithUnretainedReferences());
   buffer_ops_ = 0;
   buffer_sizes_ = 0;
+  budget_ops_ = 0;
 }
 
 void CommandEncoder::synchronize() {

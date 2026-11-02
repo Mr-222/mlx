@@ -255,6 +255,26 @@ class TestEval(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(x == 6.0).item())
         self.assertEqual((mx.ones((4,), stream=mx.cpu) + 1).sum().item(), 8.0)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_gpu_time_budget(self):
+        mx.metal.set_gpu_time_budget(1.0)
+        try:
+            # Work on two streams makes a cross-stream wait in one eval.
+            s = mx.new_stream(mx.gpu)
+            x = mx.full((1024, 1024), 1.0 / 1024)
+            for _ in range(4):
+                mx.metal.reset_gpu_time_budget()
+                y = x
+                for _ in range(20):
+                    y = mx.matmul(y, x, stream=s) + 1.0
+                mx.eval(y)
+            expected = mx.full((1024, 1024), 1.0 / 1024)
+            for _ in range(20):
+                expected = expected @ x + 1.0
+        finally:
+            mx.metal.set_gpu_time_budget(0)
+        self.assertTrue(mx.allclose(y, expected).item())
+
 
 if __name__ == "__main__":
     mlx_tests.MLXTestRunner()

@@ -101,6 +101,9 @@ class MLX_API CommandEncoder {
   void commit(std::function<void()> completion = nullptr);
   void synchronize();
 
+  // Wait for the GPU time budget before a new command buffer starts.
+  void wait_for_budget();
+
   MTL::CommandBuffer* get_command_buffer() const {
     return buffer_.get();
   }
@@ -116,6 +119,8 @@ class MLX_API CommandEncoder {
   NS::SharedPtr<MTL::CommandBuffer> buffer_;
   int buffer_ops_{0};
   size_t buffer_sizes_{0};
+  // Max ops in this buffer from the GPU time budget. 0 means no limit.
+  int budget_ops_{0};
 
   // The residency set and how many of its sets this queue has attached.
   ResidencySets& residency_sets_;
